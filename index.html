@@ -47,7 +47,7 @@
     .status.ok{ color:var(--ok); }
 
     .board-wrap{ position:relative; }
-    /* ✅ 픽셀 정렬: 높이를 JS로 계산해서 정확히 9*n + 8*gap(px)로 맞춤 */
+    /* 픽셀 정렬: 높이를 JS로 계산해서 정확히 9*n + 8*gap(px)로 맞춤 */
     .board{
       width:min(92vw, 90vmin, 640px);
       background:var(--line);                   /* gap 색 */
@@ -60,7 +60,7 @@
     }
     .cell{ background:var(--cell); display:flex; align-items:center; justify-content:center; }
 
-    /* 굵은선은 별도 absolute div로 배치 (JS가 정확한 px에 위치시킴) */
+    /* 굵은선은 별도 absolute div로 배치 */
     .thick{ position:absolute; background:var(--line); pointer-events:none; }
 
     input.sudoku{
@@ -230,7 +230,6 @@
     /* ===== 픽셀 정렬 레이아웃 ===== */
     let thickElems = [];
     function ensureThickElems(){
-      // 이미 있으면 제거 후 다시
       thickElems.forEach(el => el.remove());
       thickElems = [];
       const v1=document.createElement('div'), v2=document.createElement('div'), h1=document.createElement('div'), h2=document.createElement('div');
@@ -244,33 +243,32 @@
       const gap = parseInt(getComputedStyle(boardEl).gap)||1;
       const thick = 3;
 
-      // 가용 너비
       const outerW = Math.round(boardEl.getBoundingClientRect().width);
       const innerW = outerW - border*2;
 
-      // 셀 한 변(px)을 정수로 계산 (높이는 셀*9 + gap*8)
       const s = Math.floor((innerW - gap*8) / 9);
       const innerH = s*9 + gap*8;
       const outerH = innerH + border*2;
 
-      // 적용
       boardEl.style.height = outerH + 'px';
       boardEl.style.gridTemplateColumns = `repeat(9, ${s}px)`;
       boardEl.style.gridTemplateRows    = `repeat(9, ${s}px)`;
 
-      // 굵은선 위치 (보드 안쪽 기준)
       ensureThickElems();
-      const v1x = border + s*3 + gap*3 - Math.floor(thick/2);
-      const v2x = border + s*6 + gap*6 - Math.floor(thick/2);
-      const h1y = border + s*3 + gap*3 - Math.floor(thick/2);
-      const h2y = border + s*6 + gap*6 - Math.floor(thick/2);
+
+      // ✅ 굵은선 보정: gap의 중앙에 맞추고, 두께의 절반만큼 좌표 보정(반올림)
+      const halfGap = gap / 2;
+      const halfThick = thick / 2;
+      const v1x = Math.round(border + s*3 + gap*2 + halfGap - halfThick);
+      const v2x = Math.round(border + s*6 + gap*5 + halfGap - halfThick);
+      const h1y = Math.round(border + s*3 + gap*2 + halfGap - halfThick);
+      const h2y = Math.round(border + s*6 + gap*5 + halfGap - halfThick);
+
       const innerLen = innerH;
 
       const [v1,v2,h1,h2] = thickElems;
-      // 세로선
       Object.assign(v1.style, {left: v1x+'px', top: border+'px', width: thick+'px', height: innerLen+'px'});
       Object.assign(v2.style, {left: v2x+'px', top: border+'px', width: thick+'px', height: innerLen+'px'});
-      // 가로선
       Object.assign(h1.style, {left: border+'px', top: h1y+'px', width: innerW+'px', height: thick+'px'});
       Object.assign(h2.style, {left: border+'px', top: h2y+'px', width: innerW+'px', height: thick+'px'});
     }
@@ -299,7 +297,6 @@
         cell.addEventListener('click', ()=>{ if(hintMode){ applyHintTo(r,c); } });
         cell.appendChild(input); boardEl.appendChild(cell);
       }
-      // 레이아웃 맞추기 & 굵은선 배치
       layoutBoard();
     }
     function renderBoard(){
