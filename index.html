@@ -10,10 +10,13 @@
       --ui:#FFFFFF;   /* 버튼/패널 */
       --cell:#000000; /* 칸 내부 */
       --num:#BFBFBF;  /* 숫자 */
-      --line:#BFBFBF; /* 격자선 */
+      --line:#BFBFBF; /* 얇은 선 & 굵은선 색 */
       --accent:#9e9e9e;
       --error:#ff4d4f;
       --ok:#52c41a;
+      --gap:1px;      /* 얇은 선 두께 */
+      --thick:3px;    /* 굵은 3x3 선 두께 */
+      --border:3px;   /* 바깥 테두리 */
     }
 
     *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
@@ -44,38 +47,21 @@
     .status.ok{ color:var(--ok); }
 
     .board-wrap{ position:relative; }
-    /* ✅ 정사각 보드 + gap 선 + 오버레이로 3×3 굵은선 */
+    /* ✅ 픽셀 정렬: 높이를 JS로 계산해서 정확히 9*n + 8*gap(px)로 맞춤 */
     .board{
       width:min(92vw, 90vmin, 640px);
-      aspect-ratio:1/1;                /* 항상 정사각형 유지 */
-      background:var(--line);           /* gap(1px) 색 */
-      border:3px solid var(--line);
+      background:var(--line);                   /* gap 색 */
+      border:var(--border) solid var(--line);   /* 외곽선 */
       border-radius:16px;
       display:grid; grid-template-columns:repeat(9,1fr); grid-template-rows:repeat(9,1fr);
-      gap:1px;
+      gap:var(--gap);
       overflow:hidden;
       position:relative;
     }
     .cell{ background:var(--cell); display:flex; align-items:center; justify-content:center; }
-    .board::after{
-      content:""; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
-      /* 굵은 3x3 라인(세로/가로) */
-      background:
-        linear-gradient(to right,
-          transparent calc(33.333% - 1.5px), var(--line) calc(33.333% - 1.5px),
-          var(--line) calc(33.333% + 1.5px), transparent calc(33.333% + 1.5px),
-          transparent calc(66.666% - 1.5px), var(--line) calc(66.666% - 1.5px),
-          var(--line) calc(66.666% + 1.5px), transparent calc(66.666% + 1.5px)
-        ),
-        linear-gradient(to bottom,
-          transparent calc(33.333% - 1.5px), var(--line) calc(33.333% - 1.5px),
-          var(--line) calc(33.333% + 1.5px), transparent calc(33.333% + 1.5px),
-          transparent calc(66.666% - 1.5px), var(--line) calc(66.666% - 1.5px),
-          var(--line) calc(66.666% + 1.5px), transparent calc(66.666% + 1.5px)
-        );
-      background-repeat:no-repeat;
-      background-size:100% 100%, 100% 100%;
-    }
+
+    /* 굵은선은 별도 absolute div로 배치 (JS가 정확한 px에 위치시킴) */
+    .thick{ position:absolute; background:var(--line); pointer-events:none; }
 
     input.sudoku{
       width:100%; height:100%;
@@ -241,6 +227,58 @@
       return null;
     }
 
+    /* ===== 픽셀 정렬 레이아웃 ===== */
+    let thickElems = [];
+    function ensureThickElems(){
+      // 이미 있으면 제거 후 다시
+      thickElems.forEach(el => el.remove());
+      thickElems = [];
+      const v1=document.createElement('div'), v2=document.createElement('div'), h1=document.createElement('div'), h2=document.createElement('div');
+      v1.className=v2.className=h1.className=h2.className='thick';
+      boardEl.appendChild(v1); boardEl.appendChild(v2); boardEl.appendChild(h1); boardEl.appendChild(h2);
+      thickElems=[v1,v2,h1,h2];
+    }
+
+    function layoutBoard(){
+      const border = parseInt(getComputedStyle(boardEl).borderTopWidth)||3;
+      const gap = parseInt(getComputedStyle(boardEl).gap)||1;
+      const thick = 3;
+
+      // 가용 너비
+      const outerW = Math.round(boardEl.getBoundingClientRect().width);
+      const innerW = outerW - border*2;
+
+      // 셀 한 변(px)을 정수로 계산 (높이는 셀*9 + gap*8)
+      const s = Math.floor((innerW - gap*8) / 9);
+      const innerH = s*9 + gap*8;
+      const outerH = innerH + border*2;
+
+      // 적용
+      boardEl.style.height = outerH + 'px';
+      boardEl.style.gridTemplateColumns = `repeat(9, ${s}px)`;
+      boardEl.style.gridTemplateRows    = `repeat(9, ${s}px)`;
+
+      // 굵은선 위치 (보드 안쪽 기준)
+      ensureThickElems();
+      const v1x = border + s*3 + gap*3 - Math.floor(thick/2);
+      const v2x = border + s*6 + gap*6 - Math.floor(thick/2);
+      const h1y = border + s*3 + gap*3 - Math.floor(thick/2);
+      const h2y = border + s*6 + gap*6 - Math.floor(thick/2);
+      const innerLen = innerH;
+
+      const [v1,v2,h1,h2] = thickElems;
+      // 세로선
+      Object.assign(v1.style, {left: v1x+'px', top: border+'px', width: thick+'px', height: innerLen+'px'});
+      Object.assign(v2.style, {left: v2x+'px', top: border+'px', width: thick+'px', height: innerLen+'px'});
+      // 가로선
+      Object.assign(h1.style, {left: border+'px', top: h1y+'px', width: innerW+'px', height: thick+'px'});
+      Object.assign(h2.style, {left: border+'px', top: h2y+'px', width: innerW+'px', height: thick+'px'});
+    }
+
+    const ro = new ResizeObserver(()=> layoutBoard());
+    ro.observe(boardEl);
+    window.addEventListener('orientationchange', ()=> setTimeout(layoutBoard, 100));
+
     /* ===== UI ===== */
     function buildBoard(){
       boardEl.innerHTML='';
@@ -261,6 +299,8 @@
         cell.addEventListener('click', ()=>{ if(hintMode){ applyHintTo(r,c); } });
         cell.appendChild(input); boardEl.appendChild(cell);
       }
+      // 레이아웃 맞추기 & 굵은선 배치
+      layoutBoard();
     }
     function renderBoard(){
       for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
@@ -268,6 +308,7 @@
         const val=puzzle[r][c], given=originPuzzle[r][c]!==0;
         input.value = val? String(val): ''; input.disabled = given;
       }
+      layoutBoard();
     }
     function clearSelection(){ const prev=document.querySelector('.cell.selected'); if(prev) prev.classList.remove('selected'); }
     function selectCell(cell,input){ clearSelection(); cell.classList.add('selected'); selected=input; }
